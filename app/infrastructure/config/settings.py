@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # Project Settings → Database → Connection string → URI
     # Ejemplo: postgresql+asyncpg://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres
     database_url: str
-    db_echo: bool = False          # True en desarrollo para ver queries SQL
+    db_echo: bool = False          # True en dev para ver queries SQL
 
     # ── JWT ────────────────────────────────────────────────────────────────────
     jwt_secret_key: str
