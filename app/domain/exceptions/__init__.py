@@ -1,0 +1,33 @@
+from .domain_exceptions import (
+    DomainException,
+    UserNotFoundException,
+    UserAlreadyExistsException,
+    InvalidCredentialsException,
+    InactiveUserException,
+    PatientNotFoundException,
+    PatientAlreadyExistsException,
+    DoctorNotFoundException,
+    DoctorNotAvailableException,
+    AppointmentNotFoundException,
+    AppointmentSlotTakenException,
+    InvalidStatusTransitionException,
+    AppointmentOutsideWorkingHoursException,
+    AppointmentInThePastException,
+)
+
+__all__ = [
+    "DomainException",
+    "UserNotFoundException",
+    "UserAlreadyExistsException",
+    "InvalidCredentialsException",
+    "InactiveUserException",
+    "PatientNotFoundException",
+    "PatientAlreadyExistsException",
+    "DoctorNotFoundException",
+    "DoctorNotAvailableException",
+    "AppointmentNotFoundException",
+    "AppointmentSlotTakenException",
+    "InvalidStatusTransitionException",
+    "AppointmentOutsideWorkingHoursException",
+    "AppointmentInThePastException",
+]
