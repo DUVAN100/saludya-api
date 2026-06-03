@@ -36,7 +36,7 @@
 
 En una clínica u hospital tradicional:
 - Pacientes llaman para agendar citas ❌ Tedioso
-- Médicos tienen agendas en papel ❌ Poco confiable
+- Médicos tienen agendas en papel ❌ Poco confiable  
 - No hay control de disponibilidad ❌ Doble booking
 - Difícil de escalar ❌ Necesita más personal
 
