@@ -1,29 +1,48 @@
 ﻿name: CI
-
 on:
   push:
-    branches: [ main ]
+    branches:
+      - '**'
   pull_request:
-    branches: [ main ]
-
+    branches:
+      - '**'
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.12]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+      JWT_SECRET_KEY: ci-secret-key
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: '60'
+      APP_NAME: Saludya CI
+      APP_VERSION: 0.1.0
+      DEBUG: 'True'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.12'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
-      - name: Run tests
-        run: pytest --cov=app
-
+          pip install -r requirements.txt
+      - name: Run tests and coverage
+        run: pytest --cov=app --cov-report=term-missing
   build:
     needs: test
     runs-on: ubuntu-latest
