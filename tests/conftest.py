@@ -1,3 +1,4 @@
+import asyncio
 import os
 from collections.abc import AsyncGenerator
 from datetime import datetime, time, timezone
@@ -29,24 +30,16 @@ from app.domain.value_objects.appointment_status import AppointmentStatus  # noq
 from app.domain.value_objects.user_role import UserRole  # noqa: E402
 from app.infrastructure.persistence.database import Base, get_db_session  # noqa: E402
 from app.infrastructure.persistence.models.appointment_model import AppointmentModel  # noqa: E402
-from app.infrastructure.persistence.models.doctor_model import (  # noqa: E402
-    DoctorAvailabilityModel,
-    DoctorModel,
-)
+from app.infrastructure.persistence.models.doctor_model import DoctorAvailabilityModel, DoctorModel  # noqa: E402
 from app.infrastructure.persistence.models.patient_model import PatientModel  # noqa: E402
 from app.infrastructure.persistence.models.user_model import UserModel  # noqa: E402
 from app.infrastructure.security.jwt_handler import JWTHandler  # noqa: E402
 from app.infrastructure.security.password_hasher import PasswordHasher  # noqa: E402
 from app.main import app  # noqa: E402
 
-
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 
-test_engine = create_async_engine(
-    TEST_DATABASE_URL,
-    echo=False,
-    pool_pre_ping=True,
-)
+test_engine = create_async_engine(TEST_DATABASE_URL, echo=False, pool_pre_ping=True)
 
 TestingSessionFactory = async_sessionmaker(
     bind=test_engine,
@@ -70,62 +63,45 @@ async def override_get_db_session() -> AsyncGenerator[AsyncSession, None]:
 app.dependency_overrides[get_db_session] = override_get_db_session
 
 
+# ── Schema: sync fixture, usa asyncio.run() para no conflicto de loop ─────
 @pytest.fixture(scope="session", autouse=True)
 def database_schema():
-    import asyncio
-
-    async def create_schema() -> None:
+    async def _create():
         async with test_engine.begin() as conn:
-            await conn.execute(
-                text(
-                    """
-                    DO $$
-                    BEGIN
-                        IF NOT EXISTS (
-                            SELECT 1 FROM pg_type WHERE typname = 'appointment_status'
-                        ) THEN
-                            CREATE TYPE appointment_status AS ENUM (
-                                'pending',
-                                'confirmed',
-                                'cancelled',
-                                'completed',
-                                'no_show'
-                            );
-                        END IF;
-                    END
-                    $$;
-                    """
-                )
-            )
+            await conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_type WHERE typname = 'appointment_status'
+                    ) THEN
+                        CREATE TYPE appointment_status AS ENUM (
+                            'pending', 'confirmed', 'cancelled', 'completed', 'no_show'
+                        );
+                    END IF;
+                END $$;
+            """))
             await conn.run_sync(Base.metadata.create_all)
 
-    async def drop_schema() -> None:
+    async def _drop():
         async with test_engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
             await conn.execute(text("DROP TYPE IF EXISTS appointment_status"))
         await test_engine.dispose()
 
-    asyncio.run(create_schema())
+    asyncio.run(_create())
     yield
-    asyncio.run(drop_schema())
+    asyncio.run(_drop())
 
 
+# ── Limpia tablas antes de cada test ──────────────────────────────────────
 @pytest_asyncio.fixture(autouse=True)
 async def clean_database():
     async with test_engine.begin() as conn:
-        await conn.execute(
-            text(
-                """
-                TRUNCATE TABLE
-                    appointments,
-                    doctor_availability,
-                    doctors,
-                    patients,
-                    users
-                RESTART IDENTITY CASCADE
-                """
-            )
-        )
+        await conn.execute(text("""
+            TRUNCATE TABLE
+                appointments, doctor_availability, doctors, patients, users
+            RESTART IDENTITY CASCADE
+        """))
 
 
 @pytest.fixture
@@ -159,7 +135,8 @@ def jwt_handler() -> JWTHandler:
     return JWTHandler()
 
 
-async def create_user(
+# ── Helpers internos ───────────────────────────────────────────────────────
+async def _create_user(
     session: AsyncSession,
     *,
     email: str,
@@ -179,7 +156,7 @@ async def create_user(
     return user
 
 
-async def create_patient(
+async def _create_patient(
     session: AsyncSession,
     *,
     email: str = "patient@example.com",
@@ -188,12 +165,7 @@ async def create_patient(
     last_name: str = "Paciente",
     document_number: str = "PAT-001",
 ) -> PatientModel:
-    user = await create_user(
-        session,
-        email=email,
-        password=password,
-        role=UserRole.patient,
-    )
+    user = await _create_user(session, email=email, password=password, role=UserRole.patient)
     patient = PatientModel(
         id=uuid4(),
         user_id=user.id,
@@ -208,7 +180,7 @@ async def create_patient(
     return patient
 
 
-async def create_doctor(
+async def _create_doctor(
     session: AsyncSession,
     *,
     email: str = "doctor@example.com",
@@ -218,12 +190,7 @@ async def create_doctor(
     specialty: str = "Cardiologia",
     license_number: str = "MED-001",
 ) -> DoctorModel:
-    user = await create_user(
-        session,
-        email=email,
-        password=password,
-        role=UserRole.doctor,
-    )
+    user = await _create_user(session, email=email, password=password, role=UserRole.doctor)
     doctor = DoctorModel(
         id=uuid4(),
         user_id=user.id,
@@ -236,21 +203,19 @@ async def create_doctor(
     session.add(doctor)
     await session.flush()
     for day in range(1, 6):
-        session.add(
-            DoctorAvailabilityModel(
-                id=uuid4(),
-                doctor_id=doctor.id,
-                day_of_week=day,
-                start_time=time(8, 0),
-                end_time=time(17, 0),
-                is_active=True,
-            )
-        )
+        session.add(DoctorAvailabilityModel(
+            id=uuid4(),
+            doctor_id=doctor.id,
+            day_of_week=day,
+            start_time=time(8, 0),
+            end_time=time(17, 0),
+            is_active=True,
+        ))
     await session.flush()
     return doctor
 
 
-async def create_appointment(
+async def _create_appointment(
     session: AsyncSession,
     *,
     patient_id,
@@ -286,16 +251,36 @@ def auth_header_factory():
     return auth_header_for
 
 
+# ── Fixtures de creación para e2e/integration ─────────────────────────────
+@pytest.fixture
+def create_user(db_session):
+    async def _inner(**kwargs):
+        return await _create_user(db_session, **kwargs)
+    return _inner
+
+
+@pytest.fixture
+def create_patient(db_session):
+    async def _inner(**kwargs):
+        return await _create_patient(db_session, **kwargs)
+    return _inner
+
+
+@pytest.fixture
+def create_doctor(db_session):
+    async def _inner(**kwargs):
+        return await _create_doctor(db_session, **kwargs)
+    return _inner
+
+
 @pytest.fixture
 def current_user_override_factory():
     def override(role: UserRole = UserRole.admin, sub: str | None = None):
         from app.application.dtos.auth_dto import TokenPayloadDTO
-
         app.dependency_overrides[get_current_user] = lambda: TokenPayloadDTO(
             sub=sub or str(uuid4()),
             role=role,
         )
         return app.dependency_overrides
-
     yield override
     app.dependency_overrides.pop(get_current_user, None)

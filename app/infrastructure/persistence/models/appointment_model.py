@@ -62,3 +62,14 @@ class AppointmentModel(Base):
     doctor: Mapped["DoctorModel"] = relationship(  # noqa: F821
         "DoctorModel", back_populates="appointments", lazy="noload"
     )
+    status: Mapped[AppointmentStatus] = mapped_column(
+        SAEnum(
+            AppointmentStatus,
+            name="appointment_status",
+            create_type=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=AppointmentStatus.PENDING,
+        index=True,
+    )
